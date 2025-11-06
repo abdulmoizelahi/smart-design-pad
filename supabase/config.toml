@@ -1,0 +1,10 @@
+project_id = "hcuhidqrubzoufsxcjcz"
+
+[functions.generate-design]
+verify_jwt = false
+
+[functions.estimate-cost]
+verify_jwt = false
+
+[functions.chat-assistant]
+verify_jwt = false

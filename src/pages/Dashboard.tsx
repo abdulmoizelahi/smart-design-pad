@@ -31,7 +31,10 @@ const Dashboard = () => {
   const [chatMessage, setChatMessage] = useState("");
   const [chatHistory, setChatHistory] = useState<Array<{role: string, content: string}>>([]);
 
-  const handleGenerateDesign = () => {
+  const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  const handleGenerateDesign = async () => {
     if (!plotLength || !plotWidth || !rooms || !style) {
       toast({
         title: "Missing Information",
@@ -41,32 +44,153 @@ const Dashboard = () => {
       return;
     }
     
+    setIsGenerating(true);
     toast({
       title: "Generating Design",
       description: "AI is creating your custom floor plan...",
     });
+
+    try {
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-design`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          plotLength: parseFloat(plotLength),
+          plotWidth: parseFloat(plotWidth),
+          rooms: parseInt(rooms),
+          style
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to generate design');
+      }
+
+      const data = await response.json();
+      setGeneratedImage(data.imageUrl);
+      
+      toast({
+        title: "Design Generated!",
+        description: "Your custom floor plan is ready.",
+      });
+    } catch (error) {
+      console.error('Design generation error:', error);
+      toast({
+        title: "Generation Failed",
+        description: error instanceof Error ? error.message : "Failed to generate design. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
-  const handleEstimateCost = () => {
+  const [costEstimate, setCostEstimate] = useState<any>(null);
+  const [isEstimating, setIsEstimating] = useState(false);
+  const [estimateArea, setEstimateArea] = useState("");
+  const [estimateQuality, setEstimateQuality] = useState("");
+  const [estimateLocation, setEstimateLocation] = useState("");
+
+  const handleEstimateCost = async () => {
+    if (!estimateArea || !estimateQuality || !estimateLocation) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill in all fields to calculate estimate.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsEstimating(true);
     toast({
       title: "Calculating Costs",
       description: "Analyzing materials and labor for accurate estimation...",
     });
+
+    try {
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/estimate-cost`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          area: parseFloat(estimateArea),
+          quality: estimateQuality,
+          location: estimateLocation
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to estimate cost');
+      }
+
+      const data = await response.json();
+      setCostEstimate(data);
+      
+      toast({
+        title: "Estimate Complete!",
+        description: "Your cost breakdown is ready.",
+      });
+    } catch (error) {
+      console.error('Cost estimation error:', error);
+      toast({
+        title: "Estimation Failed",
+        description: error instanceof Error ? error.message : "Failed to calculate estimate. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsEstimating(false);
+    }
   };
 
-  const handleSendMessage = () => {
-    if (!chatMessage.trim()) return;
+  const [isSending, setIsSending] = useState(false);
+
+  const handleSendMessage = async () => {
+    if (!chatMessage.trim() || isSending) return;
     
-    setChatHistory([...chatHistory, { role: "user", content: chatMessage }]);
+    const userMessage = { role: "user", content: chatMessage };
+    const newHistory = [...chatHistory, userMessage];
+    setChatHistory(newHistory);
     setChatMessage("");
+    setIsSending(true);
     
-    // Simulate AI response
-    setTimeout(() => {
+    try {
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat-assistant`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: newHistory
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to get response');
+      }
+
+      const data = await response.json();
       setChatHistory(prev => [...prev, { 
         role: "assistant", 
-        content: "I'm here to help with your construction project! This feature will be powered by AI to provide expert guidance on design, materials, and construction best practices." 
+        content: data.response 
       }]);
-    }, 1000);
+    } catch (error) {
+      console.error('Chat error:', error);
+      toast({
+        title: "Chat Error",
+        description: error instanceof Error ? error.message : "Failed to send message. Please try again.",
+        variant: "destructive"
+      });
+      // Remove the user message if it failed
+      setChatHistory(chatHistory);
+    } finally {
+      setIsSending(false);
+    }
   };
 
   return (
@@ -189,19 +313,28 @@ const Dashboard = () => {
                       onClick={handleGenerateDesign} 
                       className="w-full gap-2 bg-accent hover:bg-accent/90"
                       size="lg"
+                      disabled={isGenerating}
                     >
                       <Sparkles className="w-4 h-4" />
-                      Generate Design
+                      {isGenerating ? "Generating..." : "Generate Design"}
                     </Button>
                   </div>
 
-                  <div className="bg-blueprint rounded-lg border-2 border-dashed border-border p-8 flex items-center justify-center">
-                    <div className="text-center space-y-3">
-                      <Home className="w-16 h-16 mx-auto text-muted-foreground" />
-                      <p className="text-muted-foreground">
-                        Your AI-generated floor plan will appear here
-                      </p>
-                    </div>
+                  <div className="bg-blueprint rounded-lg border-2 border-dashed border-border p-8 flex items-center justify-center min-h-[400px]">
+                    {generatedImage ? (
+                      <img 
+                        src={generatedImage} 
+                        alt="Generated floor plan" 
+                        className="max-w-full h-auto rounded-lg"
+                      />
+                    ) : (
+                      <div className="text-center space-y-3">
+                        <Home className="w-16 h-16 mx-auto text-muted-foreground" />
+                        <p className="text-muted-foreground">
+                          Your AI-generated floor plan will appear here
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -226,11 +359,16 @@ const Dashboard = () => {
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <Label>Total Area (sq ft)</Label>
-                      <Input type="number" placeholder="e.g., 2000" />
+                      <Input 
+                        type="number" 
+                        placeholder="e.g., 2000" 
+                        value={estimateArea}
+                        onChange={(e) => setEstimateArea(e.target.value)}
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label>Construction Quality</Label>
-                      <Select>
+                      <Select value={estimateQuality} onValueChange={setEstimateQuality}>
                         <SelectTrigger>
                           <SelectValue placeholder="Select quality" />
                         </SelectTrigger>
@@ -244,14 +382,19 @@ const Dashboard = () => {
                     </div>
                     <div className="space-y-2">
                       <Label>Location</Label>
-                      <Input placeholder="Enter your city" />
+                      <Input 
+                        placeholder="Enter your city" 
+                        value={estimateLocation}
+                        onChange={(e) => setEstimateLocation(e.target.value)}
+                      />
                     </div>
                     <Button 
                       onClick={handleEstimateCost} 
                       className="w-full gap-2"
                       size="lg"
+                      disabled={isEstimating}
                     >
-                      Calculate Estimate
+                      {isEstimating ? "Calculating..." : "Calculate Estimate"}
                     </Button>
                   </div>
 
@@ -261,25 +404,40 @@ const Dashboard = () => {
                       <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Materials</span>
-                          <span className="font-medium">$---</span>
+                          <span className="font-medium">
+                            {costEstimate ? `$${costEstimate.materials.toLocaleString()}` : '$---'}
+                          </span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Labor</span>
-                          <span className="font-medium">$---</span>
+                          <span className="font-medium">
+                            {costEstimate ? `$${costEstimate.labor.toLocaleString()}` : '$---'}
+                          </span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Equipment</span>
-                          <span className="font-medium">$---</span>
+                          <span className="font-medium">
+                            {costEstimate ? `$${costEstimate.equipment.toLocaleString()}` : '$---'}
+                          </span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Permits & Fees</span>
-                          <span className="font-medium">$---</span>
+                          <span className="font-medium">
+                            {costEstimate ? `$${costEstimate.permits.toLocaleString()}` : '$---'}
+                          </span>
                         </div>
                         <div className="border-t border-border pt-2 mt-2 flex justify-between text-base">
                           <span className="font-semibold">Total Estimate</span>
-                          <span className="font-bold text-accent">$---</span>
+                          <span className="font-bold text-accent">
+                            {costEstimate ? `$${costEstimate.total.toLocaleString()}` : '$---'}
+                          </span>
                         </div>
                       </div>
+                      {costEstimate?.details && (
+                        <p className="text-xs text-muted-foreground mt-3 pt-3 border-t border-border">
+                          {costEstimate.details}
+                        </p>
+                      )}
                     </Card>
                     <p className="text-xs text-muted-foreground">
                       * Estimates are based on average market rates and may vary based on actual conditions and contractor quotes.
@@ -345,9 +503,10 @@ const Dashboard = () => {
                       <Button 
                         onClick={handleSendMessage}
                         className="gap-2"
+                        disabled={isSending}
                       >
                         <MessageSquare className="w-4 h-4" />
-                        Send
+                        {isSending ? "Sending..." : "Send"}
                       </Button>
                     </div>
                   </div>
