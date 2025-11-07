@@ -14,10 +14,12 @@ import {
   Sparkles,
   Ruler,
   Building,
-  Palette
+  Palette,
+  Box
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import FloorPlan3D from "@/components/FloorPlan3D";
 
 const Dashboard = () => {
   const { toast } = useToast();
@@ -33,6 +35,7 @@ const Dashboard = () => {
 
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [show3D, setShow3D] = useState(false);
 
   const handleGenerateDesign = async () => {
     if (!plotLength || !plotWidth || !rooms || !style) {
@@ -320,19 +323,56 @@ const Dashboard = () => {
                     </Button>
                   </div>
 
-                  <div className="bg-blueprint rounded-lg border-2 border-dashed border-border p-8 flex items-center justify-center min-h-[400px]">
-                    {generatedImage ? (
-                      <img 
-                        src={generatedImage} 
-                        alt="Generated floor plan" 
-                        className="max-w-full h-auto rounded-lg"
-                      />
-                    ) : (
-                      <div className="text-center space-y-3">
-                        <Home className="w-16 h-16 mx-auto text-muted-foreground" />
-                        <p className="text-muted-foreground">
-                          Your AI-generated floor plan will appear here
-                        </p>
+                  <div className="space-y-4">
+                    <div className="bg-blueprint rounded-lg border-2 border-dashed border-border overflow-hidden min-h-[400px]">
+                      {generatedImage ? (
+                        <>
+                          {show3D ? (
+                            <div className="h-[500px]">
+                              <FloorPlan3D
+                                plotLength={parseFloat(plotLength) || 50}
+                                plotWidth={parseFloat(plotWidth) || 40}
+                                rooms={parseInt(rooms) || 4}
+                                style={style || 'modern'}
+                              />
+                            </div>
+                          ) : (
+                            <img 
+                              src={generatedImage} 
+                              alt="Generated floor plan" 
+                              className="w-full h-auto"
+                            />
+                          )}
+                        </>
+                      ) : (
+                        <div className="flex items-center justify-center h-[400px]">
+                          <div className="text-center space-y-3">
+                            <Home className="w-16 h-16 mx-auto text-muted-foreground" />
+                            <p className="text-muted-foreground">
+                              Your AI-generated floor plan will appear here
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {generatedImage && (
+                      <div className="flex gap-2">
+                        <Button
+                          variant={!show3D ? "default" : "outline"}
+                          onClick={() => setShow3D(false)}
+                          className="flex-1"
+                        >
+                          2D View
+                        </Button>
+                        <Button
+                          variant={show3D ? "default" : "outline"}
+                          onClick={() => setShow3D(true)}
+                          className="flex-1 gap-2"
+                        >
+                          <Box className="w-4 h-4" />
+                          3D View
+                        </Button>
                       </div>
                     )}
                   </div>
