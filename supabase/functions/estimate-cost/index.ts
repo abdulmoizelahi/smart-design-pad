@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -19,24 +20,59 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY is not configured');
     }
 
-    const systemPrompt = `You are a construction cost estimation expert. 
-    Provide detailed and realistic cost estimates for home construction projects.
+    // Initialize Supabase client to fetch materials data
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Fetch all materials from database
+    const { data: materials, error: materialsError } = await supabase
+      .from('materials')
+      .select('*');
+
+    if (materialsError) {
+      console.error('Error fetching materials:', materialsError);
+      throw new Error('Failed to fetch materials database');
+    }
+
+    console.log(`Fetched ${materials?.length || 0} materials from database`);
+
+    // Prepare materials data for AI context
+    const materialsContext = JSON.stringify(materials, null, 2);
+
+    const systemPrompt = `You are a construction cost estimation expert with access to a real materials pricing database.
+    Use the provided materials data to calculate accurate costs based on regional adjustments and quality multipliers.
     Always respond with a valid JSON object containing the cost breakdown.`;
 
-    const userPrompt = `Estimate construction costs for:
-    - Total Area: ${area} sq ft
-    - Quality Level: ${quality}
-    - Location: ${location}
-    
-    Provide a detailed breakdown in JSON format with these exact keys:
-    {
-      "materials": number (in USD),
-      "labor": number (in USD),
-      "equipment": number (in USD),
-      "permits": number (in USD),
-      "total": number (in USD),
-      "details": string (brief explanation of estimates)
-    }`;
+    const userPrompt = `Estimate construction costs for a home construction project using this REAL materials pricing data:
+
+${materialsContext}
+
+Project specifications:
+- Total Area: ${area} sq ft
+- Quality Level: ${quality}
+- Location: ${location}
+
+Calculate costs using the materials database:
+1. For each material category (foundation, framing, roofing, exterior, interior, electrical, plumbing):
+   - Select appropriate materials based on quality level
+   - Apply quality_multiplier[${quality}] to base_price
+   - Apply regional_adjustments based on location type (urban/suburban/rural)
+   - Calculate quantities based on area
+
+2. Add labor costs (typically 40-60% of materials depending on quality)
+3. Add equipment costs (typically 5-10% of materials + labor)
+4. Add permits (typically 1-3% of total project cost)
+
+Provide a detailed breakdown in JSON format with these exact keys:
+{
+  "materials": number (in USD, calculated from database prices),
+  "labor": number (in USD),
+  "equipment": number (in USD),
+  "permits": number (in USD),
+  "total": number (in USD),
+  "details": string (explanation including which materials were used, quantities, and supplier recommendations from the database)
+}`;
 
     console.log('Calling AI gateway for cost estimation...');
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {

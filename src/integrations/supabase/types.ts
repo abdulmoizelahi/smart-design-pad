@@ -14,7 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      materials: {
+        Row: {
+          base_price: number
+          category: string
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          quality_multiplier: Json
+          regional_adjustments: Json
+          supplier_info: Json | null
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          base_price: number
+          category: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          quality_multiplier?: Json
+          regional_adjustments?: Json
+          supplier_info?: Json | null
+          unit: string
+          updated_at?: string
+        }
+        Update: {
+          base_price?: number
+          category?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          quality_multiplier?: Json
+          regional_adjustments?: Json
+          supplier_info?: Json | null
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
