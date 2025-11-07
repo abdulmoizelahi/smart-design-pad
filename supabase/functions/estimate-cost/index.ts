@@ -37,41 +37,47 @@ serve(async (req) => {
 
     console.log(`Fetched ${materials?.length || 0} materials from database`);
 
-    // Prepare materials data for AI context
-    const materialsContext = JSON.stringify(materials, null, 2);
+    // Prepare simplified materials summary for AI context
+    const materialsSummary = materials?.map(m => ({
+      name: m.name,
+      category: m.category,
+      unit: m.unit,
+      base_price: m.base_price,
+      quality_multiplier: m.quality_multiplier,
+      regional_adjustments: m.regional_adjustments
+    })) || [];
 
     const systemPrompt = `You are a construction cost estimation expert with access to a real materials pricing database.
     Use the provided materials data to calculate accurate costs based on regional adjustments and quality multipliers.
-    Always respond with a valid JSON object containing the cost breakdown.`;
+    You must respond with ONLY a valid JSON object - no markdown formatting, no code blocks, just the raw JSON.`;
 
-    const userPrompt = `Estimate construction costs for a home construction project using this REAL materials pricing data:
+    const userPrompt = `Estimate construction costs for a home construction project.
 
-${materialsContext}
+MATERIALS DATABASE (use this for calculations):
+${JSON.stringify(materialsSummary)}
 
-Project specifications:
+PROJECT SPECIFICATIONS:
 - Total Area: ${area} sq ft
 - Quality Level: ${quality}
 - Location: ${location}
 
-Calculate costs using the materials database:
-1. For each material category (foundation, framing, roofing, exterior, interior, electrical, plumbing):
-   - Select appropriate materials based on quality level
-   - Apply quality_multiplier[${quality}] to base_price
-   - Apply regional_adjustments based on location type (urban/suburban/rural)
-   - Calculate quantities based on area
+CALCULATION INSTRUCTIONS:
+1. Calculate material costs by category (foundation, framing, roofing, exterior, interior, electrical, plumbing)
+2. Apply quality_multiplier["${quality}"] to each material's base_price
+3. Apply regional_adjustments based on location (determine if urban/suburban/rural)
+4. Calculate quantities based on area
+5. Add labor costs (40-60% of materials based on quality)
+6. Add equipment costs (5-10% of materials + labor)
+7. Add permits (1-3% of total)
 
-2. Add labor costs (typically 40-60% of materials depending on quality)
-3. Add equipment costs (typically 5-10% of materials + labor)
-4. Add permits (typically 1-3% of total project cost)
-
-Provide a detailed breakdown in JSON format with these exact keys:
+RESPONSE FORMAT (return ONLY this JSON, no markdown):
 {
-  "materials": number (in USD, calculated from database prices),
-  "labor": number (in USD),
-  "equipment": number (in USD),
-  "permits": number (in USD),
-  "total": number (in USD),
-  "details": string (explanation including which materials were used, quantities, and supplier recommendations from the database)
+  "materials": 0,
+  "labor": 0,
+  "equipment": 0,
+  "permits": 0,
+  "total": 0,
+  "details": "explanation here"
 }`;
 
     console.log('Calling AI gateway for cost estimation...');
@@ -111,18 +117,30 @@ Provide a detailed breakdown in JSON format with these exact keys:
     const data = await response.json();
     console.log('AI response received');
     
-    const content = data.choices?.[0]?.message?.content;
+    let content = data.choices?.[0]?.message?.content;
     if (!content) {
       throw new Error('No response from AI');
     }
 
-    // Extract JSON from response
+    // Clean up response - remove markdown code blocks if present
+    content = content.trim();
+    content = content.replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/\s*```$/, '');
+    
+    // Extract JSON from response more carefully
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
+      console.error('Could not find JSON in response:', content);
       throw new Error('Invalid response format from AI');
     }
 
-    const estimate = JSON.parse(jsonMatch[0]);
+    let estimate;
+    try {
+      estimate = JSON.parse(jsonMatch[0]);
+    } catch (parseError) {
+      console.error('JSON parse error:', parseError);
+      console.error('Attempted to parse:', jsonMatch[0].substring(0, 500));
+      throw new Error('Failed to parse AI response as JSON');
+    }
     
     return new Response(
       JSON.stringify(estimate),
