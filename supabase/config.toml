@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.find-contractors]
 verify_jwt = false
+
+[functions.find-designers]
+verify_jwt = false
