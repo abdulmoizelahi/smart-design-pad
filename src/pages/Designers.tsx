@@ -136,13 +136,23 @@ const Designers = () => {
       
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-12">
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-foreground mb-2 flex items-center gap-3">
-            <Palette className="w-10 h-10 text-accent" />
-            Find Your Designer
-          </h1>
-          <p className="text-muted-foreground text-lg">
-            Browse portfolios, check availability, and connect with top-rated construction and interior designers
-          </p>
+          <div className="flex items-start justify-between mb-4">
+            <div className="flex-1">
+              <h1 className="text-4xl font-bold text-foreground mb-2 flex items-center gap-3">
+                <Palette className="w-10 h-10 text-accent" />
+                Find Your Designer
+              </h1>
+              <p className="text-muted-foreground text-lg">
+                Browse portfolios, check availability, and connect with top-rated construction and interior designers
+              </p>
+            </div>
+            <Button
+              onClick={() => window.location.href = '/'}
+              className="gap-2 ml-4 bg-orange-500 hover:bg-orange-600 text-white"
+            >
+              ← Back to Home
+            </Button>
+          </div>
         </div>
 
         <div className="grid lg:grid-cols-3 gap-6">
