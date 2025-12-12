@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -15,7 +16,9 @@ import {
   Ruler,
   Building,
   Palette,
-  Box
+  Box,
+  AlertCircle,
+  Layers
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
@@ -23,13 +26,25 @@ import FloorPlan3D from "@/components/FloorPlan3D";
 
 const Dashboard = () => {
   const { toast } = useToast();
+  const [searchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  
   const [activeTab, setActiveTab] = useState("design");
+  
+  // Set active tab from URL parameter on mount
+  useEffect(() => {
+    if (tabParam && ["design", "estimate", "chat"].includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
   
   // Form states
   const [plotLength, setPlotLength] = useState("");
   const [plotWidth, setPlotWidth] = useState("");
   const [rooms, setRooms] = useState("");
+  const [floors, setFloors] = useState("1");
   const [style, setStyle] = useState("");
+  const [openArea, setOpenArea] = useState("");
   const [chatMessage, setChatMessage] = useState("");
   const [chatHistory, setChatHistory] = useState<Array<{role: string, content: string}>>([]);
 
@@ -37,11 +52,47 @@ const Dashboard = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [show3D, setShow3D] = useState(false);
 
+  // Calculate plot metrics
+  const plotMetrics = useMemo(() => {
+    const length = parseFloat(plotLength) || 0;
+    const width = parseFloat(plotWidth) || 0;
+    const open = parseFloat(openArea) || 0;
+    const totalArea = length * width;
+    const builtUpArea = totalArea - open;
+    const openPercentage = totalArea > 0 ? (open / totalArea) * 100 : 0;
+    
+    return {
+      totalArea,
+      builtUpArea,
+      openArea: open,
+      openPercentage,
+      isValid: builtUpArea >= 0 && totalArea > 0
+    };
+  }, [plotLength, plotWidth, openArea]);
+
   const handleGenerateDesign = async () => {
     if (!plotLength || !plotWidth || !rooms || !style) {
       toast({
         title: "Missing Information",
-        description: "Please fill in all fields to generate your design.",
+        description: "Please fill in all required fields to generate your design.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!plotMetrics.isValid) {
+      toast({
+        title: "Invalid Input",
+        description: "Open area cannot be larger than total plot area.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (plotMetrics.builtUpArea < 500) {
+      toast({
+        title: "Warning",
+        description: "Built-up area seems too small for the requested number of rooms.",
         variant: "destructive"
       });
       return;
@@ -63,7 +114,9 @@ const Dashboard = () => {
           plotLength: parseFloat(plotLength),
           plotWidth: parseFloat(plotWidth),
           rooms: parseInt(rooms),
-          style
+          floors: parseInt(floors),
+          style,
+          openArea: openArea ? parseFloat(openArea) : 0
         })
       });
 
@@ -102,6 +155,15 @@ const Dashboard = () => {
       toast({
         title: "Missing Information",
         description: "Please fill in all fields to calculate estimate.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (parseFloat(estimateArea) <= 0) {
+      toast({
+        title: "Invalid Area",
+        description: "Please enter a valid area greater than 0.",
         variant: "destructive"
       });
       return;
@@ -189,7 +251,6 @@ const Dashboard = () => {
         description: error instanceof Error ? error.message : "Failed to send message. Please try again.",
         variant: "destructive"
       });
-      // Remove the user message if it failed
       setChatHistory(chatHistory);
     } finally {
       setIsSending(false);
@@ -201,7 +262,6 @@ const Dashboard = () => {
       <Navbar />
       
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-12">
-        {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
           <div>
             <h1 className="text-4xl font-bold text-foreground mb-2">
@@ -217,7 +277,6 @@ const Dashboard = () => {
           </Button>
         </div>
 
-        {/* Main Content */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="grid w-full grid-cols-3 lg:w-auto">
             <TabsTrigger value="design" className="gap-2">
@@ -234,7 +293,6 @@ const Dashboard = () => {
             </TabsTrigger>
           </TabsList>
 
-          {/* AI Design Tab */}
           <TabsContent value="design" className="space-y-6">
             <Card className="p-6">
               <div className="space-y-6">
@@ -262,6 +320,7 @@ const Dashboard = () => {
                           placeholder="e.g., 50"
                           value={plotLength}
                           onChange={(e) => setPlotLength(e.target.value)}
+                          min="0"
                         />
                       </div>
                       <div className="space-y-2">
@@ -275,22 +334,89 @@ const Dashboard = () => {
                           placeholder="e.g., 40"
                           value={plotWidth}
                           onChange={(e) => setPlotWidth(e.target.value)}
+                          min="0"
+                        />
+                      </div>
+                    </div>
+
+                    {plotMetrics.totalArea > 0 && (
+                      <Card className="p-3 bg-muted/50">
+                        <div className="space-y-1 text-sm">
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Total Plot Area:</span>
+                            <span className="font-medium">{plotMetrics.totalArea.toLocaleString()} sq ft</span>
+                          </div>
+                          {plotMetrics.openArea > 0 && (
+                            <>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Open Area:</span>
+                                <span className="font-medium">{plotMetrics.openArea.toLocaleString()} sq ft ({plotMetrics.openPercentage.toFixed(1)}%)</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Built-up Area:</span>
+                                <span className="font-medium text-accent">{plotMetrics.builtUpArea.toLocaleString()} sq ft</span>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </Card>
+                    )}
+
+                    {!plotMetrics.isValid && plotMetrics.openArea > 0 && (
+                      <div className="flex items-center gap-2 p-3 bg-destructive/10 text-destructive rounded-lg text-sm">
+                        <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                        <span>Open area exceeds total plot area!</span>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="rooms" className="flex items-center gap-2">
+                          <Building className="w-4 h-4" />
+                          Number of Rooms
+                        </Label>
+                        <Input
+                          id="rooms"
+                          type="number"
+                          placeholder="e.g., 4"
+                          value={rooms}
+                          onChange={(e) => setRooms(e.target.value)}
+                          min="1"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="floors" className="flex items-center gap-2">
+                          <Layers className="w-4 h-4" />
+                          Number of Floors
+                        </Label>
+                        <Input
+                          id="floors"
+                          type="number"
+                          placeholder="e.g., 2"
+                          value={floors}
+                          onChange={(e) => setFloors(e.target.value)}
+                          min="1"
                         />
                       </div>
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="rooms" className="flex items-center gap-2">
-                        <Building className="w-4 h-4" />
-                        Number of Rooms
+                      <Label htmlFor="openArea" className="flex items-center gap-2">
+                        <Home className="w-4 h-4" />
+                        Open Area (sq ft)
                       </Label>
                       <Input
-                        id="rooms"
+                        id="openArea"
                         type="number"
-                        placeholder="e.g., 4"
-                        value={rooms}
-                        onChange={(e) => setRooms(e.target.value)}
+                        placeholder="e.g., 500 (optional)"
+                        value={openArea}
+                        onChange={(e) => setOpenArea(e.target.value)}
+                        min="0"
+                        max={plotMetrics.totalArea || undefined}
                       />
+                      <p className="text-xs text-muted-foreground">
+                        Space for lawn, courtyard, garden, etc.
+                      </p>
                     </div>
 
                     <div className="space-y-2">
@@ -316,7 +442,7 @@ const Dashboard = () => {
                       onClick={handleGenerateDesign} 
                       className="w-full gap-2 bg-accent hover:bg-accent/90"
                       size="lg"
-                      disabled={isGenerating}
+                      disabled={isGenerating || !plotMetrics.isValid}
                     >
                       <Sparkles className="w-4 h-4" />
                       {isGenerating ? "Generating..." : "Generate Design"}
@@ -381,7 +507,6 @@ const Dashboard = () => {
             </Card>
           </TabsContent>
 
-          {/* Cost Estimate Tab */}
           <TabsContent value="estimate" className="space-y-6">
             <Card className="p-6">
               <div className="space-y-6">
@@ -404,6 +529,7 @@ const Dashboard = () => {
                         placeholder="e.g., 2000" 
                         value={estimateArea}
                         onChange={(e) => setEstimateArea(e.target.value)}
+                        min="0"
                       />
                     </div>
                     <div className="space-y-2">
@@ -445,31 +571,31 @@ const Dashboard = () => {
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Materials</span>
                           <span className="font-medium">
-                            {costEstimate ? `$${costEstimate.materials.toLocaleString()}` : '$---'}
+                            {costEstimate ? `Rs ${costEstimate.materials.toLocaleString()}` : 'Rs ---'}
                           </span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Labor</span>
                           <span className="font-medium">
-                            {costEstimate ? `$${costEstimate.labor.toLocaleString()}` : '$---'}
+                            {costEstimate ? `Rs ${costEstimate.labor.toLocaleString()}` : 'Rs ---'}
                           </span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Equipment</span>
                           <span className="font-medium">
-                            {costEstimate ? `$${costEstimate.equipment.toLocaleString()}` : '$---'}
+                            {costEstimate ? `Rs ${costEstimate.equipment.toLocaleString()}` : 'Rs ---'}
                           </span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">Permits & Fees</span>
                           <span className="font-medium">
-                            {costEstimate ? `$${costEstimate.permits.toLocaleString()}` : '$---'}
+                            {costEstimate ? `Rs ${costEstimate.permits.toLocaleString()}` : 'Rs ---'}
                           </span>
                         </div>
                         <div className="border-t border-border pt-2 mt-2 flex justify-between text-base">
                           <span className="font-semibold">Total Estimate</span>
                           <span className="font-bold text-accent">
-                            {costEstimate ? `$${costEstimate.total.toLocaleString()}` : '$---'}
+                            {costEstimate ? `Rs ${costEstimate.total.toLocaleString()}` : 'Rs ---'}
                           </span>
                         </div>
                       </div>
@@ -488,7 +614,6 @@ const Dashboard = () => {
             </Card>
           </TabsContent>
 
-          {/* AI Chat Tab */}
           <TabsContent value="chat" className="space-y-6">
             <Card className="p-6">
               <div className="space-y-4">
