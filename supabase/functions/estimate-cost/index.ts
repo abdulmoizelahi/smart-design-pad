@@ -6,9 +6,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// USD to PKR conversion rate (you can update this or make it dynamic)
-const USD_TO_PKR = 278;
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -72,40 +69,61 @@ serve(async (req) => {
       regional_adjustments: m.regional_adjustments
     })) || [];
 
-    const systemPrompt = `You are a construction cost estimation expert with access to a real materials pricing database.
-    Use the provided materials data to calculate accurate costs based on regional adjustments and quality multipliers.
+    const systemPrompt = `You are a Pakistan construction cost estimation expert with deep knowledge of local market rates, material prices, and labor costs.
+    Use the provided materials data and apply Pakistan-specific pricing considerations.
     You must respond with ONLY a valid JSON object - no markdown formatting, no code blocks, just the raw JSON.
-    All costs should be calculated in USD first, then will be converted to PKR (Pakistani Rupees).`;
+    All costs must be calculated in PKR (Pakistani Rupees) based on current market rates in Pakistan.`;
 
-    const userPrompt = `Estimate construction costs for a home construction project in Pakistan.
-
-MATERIALS DATABASE (use this for calculations):
-${JSON.stringify(materialsSummary)}
+    const userPrompt = `You are calculating construction costs for Pakistan. Use the provided rate guidelines to give a direct cost estimate.
 
 PROJECT SPECIFICATIONS:
 - Total Area: ${area} sq ft
 - Quality Level: ${quality}
 - Location: ${location}
 
-CALCULATION INSTRUCTIONS:
-1. Calculate material costs by category (foundation, framing, roofing, exterior, interior, electrical, plumbing)
-2. Apply quality_multiplier["${quality}"] to each material's base_price
-3. Apply regional_adjustments based on location (determine if urban/suburban/rural)
-4. For Pakistan locations, use appropriate regional adjustments for South Asian markets
-5. Consider local labor rates and material availability in Pakistan
-6. Calculate quantities based on area
-7. Add labor costs (40-60% of materials based on quality)
-8. Add equipment costs (5-10% of materials + labor)
-9. Add permits (1-3% of total)
+PAKISTAN CONSTRUCTION RATES (December 2024):
 
-RESPONSE FORMAT (return ONLY this JSON, no markdown):
+BASE RATES PER SQ FT:
+- basic: PKR 2,750/sq ft
+- standard: PKR 4,000/sq ft  
+- premium: PKR 5,750/sq ft
+- luxury: PKR 8,500/sq ft
+
+LOCATION MULTIPLIERS:
+- Karachi, Lahore, Islamabad, Rawalpindi: 1.0x (base)
+- Faisalabad, Multan, Peshawar, Hyderabad: 0.9x
+- Other cities: 0.85x
+- Karachi specifically: Add 5% for transport
+- Islamabad specifically: Add 10% for regulations
+
+CALCULATION STEPS:
+1. Get base rate for "${quality}" quality
+2. Multiply base rate × ${area} sq ft = base total
+3. Apply location multiplier for "${location}"
+4. Split total into components:
+   - Materials: 52% of total
+   - Labor: 33% of total
+   - Equipment: 8% of total
+   - Permits: 7% of total
+
+EXAMPLE for 1000 sq ft standard in Lahore:
+- Base: 4000 × 1000 = 4,000,000
+- Location: 4,000,000 × 1.0 = 4,000,000
+- Materials: 4,000,000 × 0.52 = 2,080,000
+- Labor: 4,000,000 × 0.33 = 1,320,000
+- Equipment: 4,000,000 × 0.08 = 320,000
+- Permits: 4,000,000 × 0.07 = 280,000
+
+Now calculate for ${area} sq ft ${quality} quality in ${location}.
+
+Return ONLY this JSON (no markdown, no explanation before/after):
 {
   "materials": 0,
   "labor": 0,
   "equipment": 0,
   "permits": 0,
   "total": 0,
-  "details": "brief explanation of the estimate"
+  "details": "Estimated at PKR X/sq ft for ${quality} quality in ${location}"
 }`;
 
     console.log('Calling AI gateway for cost estimation...');
@@ -182,16 +200,16 @@ RESPONSE FORMAT (return ONLY this JSON, no markdown):
       throw new Error('AI returned invalid cost estimate format');
     }
 
-    // Convert all USD values to PKR
+    // Round all PKR values to nearest thousand for cleaner presentation
     const estimateInPKR = {
-      materials: Math.round(estimate.materials * USD_TO_PKR),
-      labor: Math.round(estimate.labor * USD_TO_PKR),
-      equipment: Math.round(estimate.equipment * USD_TO_PKR),
-      permits: Math.round(estimate.permits * USD_TO_PKR),
-      total: Math.round(estimate.total * USD_TO_PKR),
-      details: estimate.details || 'Cost estimate based on current market rates in Pakistan',
+      materials: Math.round(estimate.materials / 1000) * 1000,
+      labor: Math.round(estimate.labor / 1000) * 1000,
+      equipment: Math.round(estimate.equipment / 1000) * 1000,
+      permits: Math.round(estimate.permits / 1000) * 1000,
+      total: Math.round(estimate.total / 1000) * 1000,
+      details: estimate.details || 'Cost estimate based on current Pakistan market rates',
       currency: 'PKR',
-      conversionRate: USD_TO_PKR
+      perSqFtRate: Math.round((estimate.total / area) / 100) * 100
     };
     
     return new Response(
