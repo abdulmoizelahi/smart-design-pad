@@ -3,50 +3,63 @@ import { Sparkles, DollarSign, Package, Users, MessageSquare, BarChart } from "l
 import aiDesignIcon from "@/assets/ai-design-icon.jpg";
 import costIcon from "@/assets/cost-icon.jpg";
 import materialsIcon from "@/assets/materials-icon.jpg";
+import { useNavigate } from "react-router-dom";
 
 const features = [
+  {
+    icon: Users,
+    title: "Contractor Matching",
+    description: "Connect with verified local contractors and suppliers perfectly suited to your project needs.",
+    color: "from-purple-500 to-pink-500",
+    link: "/contractors"
+  },
+  {
+    icon: MessageSquare,
+    title: "AI Chat Assistant",
+    description: "Get instant answers to your questions and expert construction advice from our intelligent chatbot.",
+    color: "from-indigo-500 to-blue-500",
+    link: "/dashboard?tab=chat"
+  },
+  {
+    icon: BarChart,
+    title: "Project Management",
+    description: "Track progress, manage timelines, and organize all aspects of your construction project in one place.",
+    color: "from-red-500 to-rose-500",
+    link: "/dashboard"
+  },
   {
     icon: Sparkles,
     image: aiDesignIcon,
     title: "AI Design Generator",
     description: "Generate stunning floor plans and 3D visualizations based on your requirements using advanced AI technology.",
-    color: "from-blue-500 to-cyan-500"
+    color: "from-blue-500 to-cyan-500",
+    link: "/dashboard?tab=design"
   },
   {
     icon: DollarSign,
     image: costIcon,
     title: "Smart Cost Estimation",
     description: "Get accurate budget estimates with detailed material breakdowns and local market insights powered by AI.",
-    color: "from-green-500 to-emerald-500"
+    color: "from-green-500 to-emerald-500",
+    link: "/dashboard?tab=estimate"
   },
   {
     icon: Package,
     image: materialsIcon,
     title: "Material Optimization",
     description: "Discover cost-effective and sustainable materials tailored to your budget and design preferences.",
-    color: "from-orange-500 to-amber-500"
+    color: "from-orange-500 to-amber-500",
+    link: "/dashboard"
   },
-  {
-    icon: Users,
-    title: "Contractor Matching",
-    description: "Connect with verified local contractors and suppliers perfectly suited to your project needs.",
-    color: "from-purple-500 to-pink-500"
-  },
-  {
-    icon: MessageSquare,
-    title: "AI Chat Assistant",
-    description: "Get instant answers to your questions and expert construction advice from our intelligent chatbot.",
-    color: "from-indigo-500 to-blue-500"
-  },
-  {
-    icon: BarChart,
-    title: "Project Management",
-    description: "Track progress, manage timelines, and organize all aspects of your construction project in one place.",
-    color: "from-red-500 to-rose-500"
-  }
 ];
 
 export const Features = () => {
+  const navigate = useNavigate();
+
+  const handleFeatureClick = (link: string) => {
+    navigate(link);
+  };
+
   return (
     <section className="py-24 bg-gradient-subtle">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
@@ -63,7 +76,8 @@ export const Features = () => {
           {features.map((feature, index) => (
             <Card 
               key={index}
-              className="group p-6 hover:shadow-strong transition-all duration-300 hover:-translate-y-1 border-border bg-card overflow-hidden relative"
+              className="group p-6 hover:shadow-strong transition-all duration-300 hover:-translate-y-1 border-border bg-card overflow-hidden relative cursor-pointer"
+              onClick={() => handleFeatureClick(feature.link)}
             >
               {/* Background gradient on hover */}
               <div className={`absolute inset-0 bg-gradient-to-br ${feature.color} opacity-0 group-hover:opacity-5 transition-opacity duration-300`} />
