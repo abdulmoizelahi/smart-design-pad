@@ -14,18 +14,18 @@ const features = [
     link: "/contractors"
   },
   {
+    icon: BarChart,
+    title: "Find Your Designer",
+    description: "Browse portfolios, check availability, and connect with top-rated construction and interior designers for your project.",
+    color: "from-red-500 to-rose-500",
+    link: "/designers"
+  },
+  {
     icon: MessageSquare,
     title: "AI Chat Assistant",
     description: "Get instant answers to your questions and expert construction advice from our intelligent chatbot.",
     color: "from-indigo-500 to-blue-500",
     link: "/dashboard?tab=chat"
-  },
-  {
-    icon: BarChart,
-    title: "Project Management",
-    description: "Track progress, manage timelines, and organize all aspects of your construction project in one place.",
-    color: "from-red-500 to-rose-500",
-    link: "/dashboard"
   },
   {
     icon: Sparkles,
