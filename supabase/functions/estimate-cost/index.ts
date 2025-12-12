@@ -6,6 +6,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// USD to PKR conversion rate (you can update this or make it dynamic)
+const USD_TO_PKR = 278;
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -14,6 +17,28 @@ serve(async (req) => {
   try {
     const { area, quality, location } = await req.json();
     console.log('Estimating cost for:', { area, quality, location });
+
+    // Validate inputs
+    if (!area || !quality || !location) {
+      return new Response(
+        JSON.stringify({ error: 'Missing required parameters: area, quality, and location are required' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (area <= 0) {
+      return new Response(
+        JSON.stringify({ error: 'Area must be greater than 0' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!['basic', 'standard', 'premium', 'luxury'].includes(quality.toLowerCase())) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid quality level. Must be: basic, standard, premium, or luxury' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
@@ -49,9 +74,10 @@ serve(async (req) => {
 
     const systemPrompt = `You are a construction cost estimation expert with access to a real materials pricing database.
     Use the provided materials data to calculate accurate costs based on regional adjustments and quality multipliers.
-    You must respond with ONLY a valid JSON object - no markdown formatting, no code blocks, just the raw JSON.`;
+    You must respond with ONLY a valid JSON object - no markdown formatting, no code blocks, just the raw JSON.
+    All costs should be calculated in USD first, then will be converted to PKR (Pakistani Rupees).`;
 
-    const userPrompt = `Estimate construction costs for a home construction project.
+    const userPrompt = `Estimate construction costs for a home construction project in Pakistan.
 
 MATERIALS DATABASE (use this for calculations):
 ${JSON.stringify(materialsSummary)}
@@ -65,10 +91,12 @@ CALCULATION INSTRUCTIONS:
 1. Calculate material costs by category (foundation, framing, roofing, exterior, interior, electrical, plumbing)
 2. Apply quality_multiplier["${quality}"] to each material's base_price
 3. Apply regional_adjustments based on location (determine if urban/suburban/rural)
-4. Calculate quantities based on area
-5. Add labor costs (40-60% of materials based on quality)
-6. Add equipment costs (5-10% of materials + labor)
-7. Add permits (1-3% of total)
+4. For Pakistan locations, use appropriate regional adjustments for South Asian markets
+5. Consider local labor rates and material availability in Pakistan
+6. Calculate quantities based on area
+7. Add labor costs (40-60% of materials based on quality)
+8. Add equipment costs (5-10% of materials + labor)
+9. Add permits (1-3% of total)
 
 RESPONSE FORMAT (return ONLY this JSON, no markdown):
 {
@@ -77,7 +105,7 @@ RESPONSE FORMAT (return ONLY this JSON, no markdown):
   "equipment": 0,
   "permits": 0,
   "total": 0,
-  "details": "explanation here"
+  "details": "brief explanation of the estimate"
 }`;
 
     console.log('Calling AI gateway for cost estimation...');
@@ -142,8 +170,32 @@ RESPONSE FORMAT (return ONLY this JSON, no markdown):
       throw new Error('Failed to parse AI response as JSON');
     }
     
+    // Validate that all required fields are present and are numbers
+    if (
+      typeof estimate.materials !== 'number' ||
+      typeof estimate.labor !== 'number' ||
+      typeof estimate.equipment !== 'number' ||
+      typeof estimate.permits !== 'number' ||
+      typeof estimate.total !== 'number'
+    ) {
+      console.error('Invalid estimate format:', estimate);
+      throw new Error('AI returned invalid cost estimate format');
+    }
+
+    // Convert all USD values to PKR
+    const estimateInPKR = {
+      materials: Math.round(estimate.materials * USD_TO_PKR),
+      labor: Math.round(estimate.labor * USD_TO_PKR),
+      equipment: Math.round(estimate.equipment * USD_TO_PKR),
+      permits: Math.round(estimate.permits * USD_TO_PKR),
+      total: Math.round(estimate.total * USD_TO_PKR),
+      details: estimate.details || 'Cost estimate based on current market rates in Pakistan',
+      currency: 'PKR',
+      conversionRate: USD_TO_PKR
+    };
+    
     return new Response(
-      JSON.stringify(estimate),
+      JSON.stringify(estimateInPKR),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
